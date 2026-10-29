@@ -7,7 +7,7 @@ export const DEMO_CREDENTIALS = {
   hr: {
     email: 'hr@staffsync.com',
     password: 'password123',
-    label: 'HR Personnel (Sarah Jenkins)',
+    label: 'HR Admin (Sarah Jenkins)',
     role: 'hr',
   },
   manager: {
@@ -25,27 +25,37 @@ export const DEMO_CREDENTIALS = {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('staffsync_token') || null);
+  const [token, setToken] = useState(() => localStorage.getItem('staffsync_token') || null);
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('staffsync_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
 
-  // Load user profile on mount if token exists
+  // Validate session on mount if token exists
   useEffect(() => {
     const fetchUser = async () => {
-      if (!token) {
+      const savedToken = localStorage.getItem('staffsync_token');
+      if (!savedToken) {
+        setUser(null);
         setLoading(false);
         return;
       }
 
       try {
         const response = await api.get('/auth/me');
-        if (response.data.success) {
+        if (response.data.success && response.data.user) {
           setUser(response.data.user);
+          localStorage.setItem('staffsync_user', JSON.stringify(response.data.user));
         } else {
           logout();
         }
       } catch (err) {
-        console.error('Failed to authenticate session:', err);
+        console.error('Session validation error:', err.response?.data?.message || err.message);
         logout();
       } finally {
         setLoading(false);
@@ -53,21 +63,25 @@ export const AuthProvider = ({ children }) => {
     };
 
     fetchUser();
-  }, [token]);
+  }, []);
 
   const login = async (email, password) => {
     try {
-      const response = await api.post('/auth/login', { email, password });
+      const cleanEmail = email.trim().toLowerCase();
+      const response = await api.post('/auth/login', { email: cleanEmail, password });
+      
       if (response.data.success) {
         const { token: newToken, user: userData } = response.data;
         localStorage.setItem('staffsync_token', newToken);
+        localStorage.setItem('staffsync_user', JSON.stringify(userData));
         setToken(newToken);
         setUser(userData);
-        return { success: true };
+        setLoading(false);
+        return { success: true, user: userData };
       }
       return { success: false, message: response.data.message || 'Login failed' };
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Login failed';
+      const msg = err.response?.data?.message || err.message || 'Invalid credentials or server unreachable';
       return { success: false, message: msg };
     }
   };
@@ -77,6 +91,7 @@ export const AuthProvider = ({ children }) => {
     if (creds) {
       return await login(creds.email, creds.password);
     }
+    return { success: false, message: 'Invalid demo role selected' };
   };
 
   const logout = () => {
@@ -84,10 +99,15 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('staffsync_user');
     setToken(null);
     setUser(null);
+    setLoading(false);
   };
 
   const updateUser = (updatedUser) => {
-    setUser((prev) => ({ ...prev, ...updatedUser }));
+    setUser((prev) => {
+      const nextUser = { ...prev, ...updatedUser };
+      localStorage.setItem('staffsync_user', JSON.stringify(nextUser));
+      return nextUser;
+    });
   };
 
   return (
@@ -100,7 +120,7 @@ export const AuthProvider = ({ children }) => {
         quickLogin,
         logout,
         updateUser,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user && !!token,
         isHR: user?.role === 'hr',
         isManager: user?.role === 'manager',
         isEmployee: user?.role === 'employee',
@@ -118,4 +138,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

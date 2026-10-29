@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import LoadingSpinner from './components/common/LoadingSpinner';
 import MainLayout from './components/layout/MainLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -15,7 +16,10 @@ import NotFound from './pages/NotFound';
 
 const LoginRoute = () => {
   const { isAuthenticated, loading } = useAuth();
-  if (!loading && isAuthenticated) {
+  if (loading) {
+    return <LoadingSpinner fullScreen={true} text="Initializing StaffSync..." />;
+  }
+  if (isAuthenticated) {
     return <Navigate to="/" replace />;
   }
   return <Login />;

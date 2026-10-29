@@ -19,15 +19,17 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor to handle unauthorized / expired tokens
+// Interceptor to handle unauthorized / expired tokens safely
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // If unauthorized and not on login page, clear token and redirect
+    const isLoginEndpoint = error.config?.url?.includes('/auth/login');
+    
+    // Only handle 401 redirect if NOT attempting to log in
+    if (error.response && error.response.status === 401 && !isLoginEndpoint) {
+      localStorage.removeItem('staffsync_token');
+      localStorage.removeItem('staffsync_user');
       if (!window.location.pathname.includes('/login')) {
-        localStorage.removeItem('staffsync_token');
-        localStorage.removeItem('staffsync_user');
         window.location.href = '/login';
       }
     }
@@ -36,4 +38,3 @@ api.interceptors.response.use(
 );
 
 export default api;
-
